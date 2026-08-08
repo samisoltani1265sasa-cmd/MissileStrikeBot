@@ -27,9 +27,31 @@ jobs:
       - name: Install requirements
         run: pip install -r extracted/MissileStrikeBot/requirements.txt
 
+      # بازیابی آخرین نسخه‌ی دیتابیس ذخیره‌شده از اجرای موفق قبلی
+      - name: Restore previous database
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          mkdir -p extracted/MissileStrikeBot/database
+          RUN_ID=$(gh run list --workflow="bot.yml" --status=success --limit=1 --json databaseId --jq '.[0].databaseId' -R ${{ github.repository }})
+          if [ -n "$RUN_ID" ]; then
+            gh run download "$RUN_ID" -n bot-database -D extracted/MissileStrikeBot/database -R ${{ github.repository }} || echo "No previous database found, starting fresh."
+          fi
+
       - name: Run bot
         env:
           BOT_TOKEN: ${{ secrets.BOT_TOKEN }}
           ADMIN_IDS: ${{ secrets.ADMIN_IDS }}
         working-directory: extracted/MissileStrikeBot
         run: python main.py
+
+      # ذخیره‌ی دیتابیس فعلی، چه job با موفقیت تمام شود چه با timeout/خطا قطع شود
+      - name: Save database
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bot-database
+          path: extracted/MissileStrikeBot/database/missile_strike.db
+          retention-days: 7
+          overwrite: true
